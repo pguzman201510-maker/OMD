@@ -320,6 +320,7 @@ class PDFParser:
         """
         Heuristic extraction of bond data from a line.
         Expected columns: ISIN, Vencimiento, Den, Cupon, Tasa, Precio, Nom Orig, Nom COP
+        Example: COL17CT04134 15-dic-26 COP 0,00% 10,655% 90,471 9.716.595.800.000 ...
         """
         parts = line.split()
         data = {
@@ -335,65 +336,100 @@ class PDFParser:
         if not parts:
             return data
 
-        # 1. ISIN (First usually)
+        # 1. ISIN
         if re.match(r'^[A-Z0-9]{10,12}$', parts[0]):
             data["ISIN"] = parts[0]
 
-        # 2. Date (Search for pattern)
-        # YYYY-MM-DD or DD/MM/YYYY
-        # Using a list allows us to remove found items to avoid confusion?
-        # Better to iterate and classify.
+        # Helper for Spanish Month Date
+        def parse_spanish_date(d_str):
+            # 15-dic-26 or 15-Dic-26
+            match = re.match(r'(\d{1,2})-([a-zA-Z]{3})-(\d{2,4})', d_str)
+            if match:
+                d, m, y = match.groups()
+                months = {
+                    "ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
+                    "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12
+                }
+                m_num = months.get(m.lower()[:3], 0)
+                if m_num == 0: return None
+
+                y_num = int(y)
+                if y_num < 100: y_num += 2000 # Assume 20xx
+
+                try:
+                    return date(y_num, m_num, int(d))
+                except:
+                    return None
+            return None
+
+        # Helper for Number
+        def parse_number(n_str):
+            # Remove %
+            n = n_str.replace('%', '')
+            # Handle dots as thousand, comma as decimal (Spanish format)
+            # 9.716.595.800.000 -> 9716595800000
+            # 90,471 -> 90.471
+            # 0,00 -> 0.00
+            if ',' in n and '.' in n:
+                # Both used. Assume dot is thousand, comma is decimal
+                n = n.replace('.', '').replace(',', '.')
+            elif ',' in n:
+                # Comma only. Likely decimal (European)
+                n = n.replace(',', '.')
+            # If dot only, ambiguous. But in this PDF, dot seems to be thousand (nominal) OR decimal (price?)
+            # Wait, Price 90,471 (comma).
+            # Nominal 9.716.595 (dot).
+            # So DOT is Thousand, COMMA is Decimal.
+            elif '.' in n:
+                # 10.000 -> 10000? Or 10.00?
+                # Usually nominals are large, so 10.000 is 10k.
+                # Yields are small. 10.5.
+                # But here yields are 10,655%. So comma.
+                # So dot is purely thousand separator.
+                n = n.replace('.', '')
+
+            try:
+                return float(n)
+            except:
+                return None
 
         nums = []
-        date_str = None
         denom = "COP"
 
         for p in parts[1:]:
-            # Check for Denom
+            # Check Denom
             if p.upper() in ["UVR", "COP", "PESOS"]:
                 denom = "UVR" if p.upper() == "UVR" else "COP"
                 continue
 
-            # Check for Date
-            # 2025-10-10 or 10/10/2025
-            if re.match(r'\d{4}-\d{2}-\d{2}', p) or re.match(r'\d{1,2}/\d{1,2}/\d{4}', p):
-                date_str = p
+            # Check Date
+            d = parse_spanish_date(p)
+            if d:
+                data["Maturity"] = d
                 continue
 
-            # Check for Percentage (remove %)
-            p_clean = p.replace('%', '').replace(',', '')
-            # Handle standard number format (1,000.00 or 1.000,00)
-            # Assumption: PDF text usually has standard format or consistent.
-            # Let's try to float it.
-            try:
-                val = float(p_clean)
+            # Check Number
+            val = parse_number(p)
+            if val is not None:
                 nums.append(val)
-            except:
-                pass
 
         data["Denom"] = denom
-        data["Maturity"] = date_str
 
-        # Heuristic mapping of numbers
-        # Usually: Coupon (small), Yield (small), Price (around 100), Nominal (Huge)
-        # Or Position based: Cupon, Tasa, Precio, NomOrig, NomCOP
-        # If we have 5 numbers found:
-        # [Coupon, Yield, Price, NomOrig, NomCOP]
-
-        # Filter out numbers that might be just parts of date if logic failed? No.
+        # Heuristic Assignment
+        # Columns in PDF: Cupón, Tasa, Precio, Valor Nominal Original, ...
+        # Expecting: [Coupon, Yield, Price, NomOrig, NomCOP, Cost]
 
         if len(nums) >= 4:
-            # Assuming order: Coupon, Yield, Price, Nominal...
-            # Coupon and Yield are usually < 20
-            # Price is ~80-130
-            # Nominal is > 1000
-
-            # Let's assign by position first as per column list:
-            # CUPON, TASA, PRECIO, NOMINAL
-
+            # 1. Coupon (0.00 to ~15.00)
             data["Coupon"] = nums[0]
+
+            # 2. Yield (0.00 to ~20.00)
             data["Yield"] = nums[1]
+
+            # 3. Price (60 to 140 usually)
             data["Price"] = nums[2]
+
+            # 4. Nominal (Very large)
             data["Nominal"] = nums[3]
 
         return data
