@@ -355,7 +355,8 @@ class PDFParser:
             "Coupon": 0.0,
             "Yield": 0.0,
             "Price": 0.0,
-            "Nominal": 0.0
+            "Nominal": 0.0,
+            "Nominal_COP": 0.0
         }
 
         if not parts:
@@ -455,9 +456,17 @@ class PDFParser:
         if price_idx != -1:
             data["Price"] = nums[price_idx]
 
-            # Nominal is usually immediately after Price
+            # Nominal (Original) is usually immediately after Price
             if len(nums) > price_idx + 1:
                 data["Nominal"] = nums[price_idx + 1]
+
+            # Nominal (COP) is usually after Nominal (Original)
+            if len(nums) > price_idx + 2:
+                data["Nominal_COP"] = nums[price_idx + 2]
+            else:
+                # If missing, fallback to Original (valid for COP bonds usually)
+                if len(nums) > price_idx + 1:
+                     data["Nominal_COP"] = nums[price_idx + 1]
 
             # Values before Price are Yield and Coupon
             if price_idx == 1:

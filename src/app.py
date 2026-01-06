@@ -1,9 +1,9 @@
 
 import streamlit as st
 import pandas as pd
-from logic import PDFParser, BondLogic
-from data_manager import DataManager
-from pdf_generator import PDFGenerator
+from src.logic import PDFParser, BondLogic
+from src.data_manager import DataManager
+from src.pdf_generator import PDFGenerator
 import io
 import os
 from datetime import datetime
@@ -51,7 +51,7 @@ if pdf_file:
     # Step 2: Data Editor for Bonds
     st.subheader("Detalle de Títulos")
 
-    columns = ["Tipo", "ISIN", "Vencimiento", "Denom (COP/UVR)", "Cupón %", "Tasa %", "Precio (Sucio) %", "Valor Nominal Orig", "Nominal COP (Calc)"]
+    columns = ["Tipo", "ISIN", "Vencimiento", "Denom (COP/UVR)", "Cupón %", "Tasa %", "Precio (Sucio) %", "Valor Nominal Orig", "Valor Nominal COP (PDF)", "Nominal COP (Calc)"]
 
     data = []
 
@@ -67,6 +67,7 @@ if pdf_file:
                 "Tasa %": r.get("Yield", 0.0),
                 "Precio (Sucio) %": r.get("Price", 0.0),
                 "Valor Nominal Orig": r.get("Nominal", 0.0),
+                "Valor Nominal COP (PDF)": r.get("Nominal_COP", 0.0),
                 "Nominal COP (Calc)": 0.0 # Calc field
             })
 
