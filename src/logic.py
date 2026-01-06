@@ -420,17 +420,17 @@ class PDFParser:
         # Expecting: [Coupon, Yield, Price, NomOrig, NomCOP, Cost]
 
         if len(nums) >= 4:
-            # 1. Coupon (0.00 to ~15.00)
+            # Case: Coupon, Yield, Price, Nominal
             data["Coupon"] = nums[0]
-
-            # 2. Yield (0.00 to ~20.00)
             data["Yield"] = nums[1]
-
-            # 3. Price (60 to 140 usually)
             data["Price"] = nums[2]
-
-            # 4. Nominal (Very large)
             data["Nominal"] = nums[3]
+        elif len(nums) == 3:
+            # Case: Missing Coupon (Zero), Yield, Price, Nominal
+            data["Coupon"] = 0.0
+            data["Yield"] = nums[0]
+            data["Price"] = nums[1]
+            data["Nominal"] = nums[2]
 
         return data
 
