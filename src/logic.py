@@ -323,6 +323,31 @@ class PDFParser:
         Example: COL17CT04134 15-dic-26 COP 0,00% 10,655% 90,471 9.716.595.800.000 ...
         """
         parts = line.split()
+
+        # Pre-process parts to merge fragmented numbers (e.g. "5.000 .000 .000")
+        merged_parts = []
+        if parts:
+            merged_parts.append(parts[0])
+            for p in parts[1:]:
+                # If current part starts with . or , and previous ended with digit
+                # OR previous ended with . or , and current starts with digit
+                if not merged_parts:
+                    merged_parts.append(p)
+                    continue
+
+                prev = merged_parts[-1]
+
+                # Case 1: "5.000" + ".000" -> "5.000.000"
+                if re.match(r'^[.,]\d+', p) and re.match(r'.*\d$', prev):
+                    merged_parts[-1] += p
+                # Case 2: "5." + "000" -> "5.000"
+                elif re.match(r'.*[.,]$', prev) and re.match(r'^\d+', p):
+                    merged_parts[-1] += p
+                else:
+                    merged_parts.append(p)
+
+        parts = merged_parts
+
         data = {
             "ISIN": "",
             "Maturity": None,
