@@ -417,20 +417,50 @@ class PDFParser:
 
         # Heuristic Assignment
         # Columns in PDF: Cupón, Tasa, Precio, Valor Nominal Original, ...
-        # Expecting: [Coupon, Yield, Price, NomOrig, NomCOP, Cost]
+        # Strategy: Pivot around Price (typically 40-160)
 
-        if len(nums) >= 4:
-            # Case: Coupon, Yield, Price, Nominal
-            data["Coupon"] = nums[0]
-            data["Yield"] = nums[1]
-            data["Price"] = nums[2]
-            data["Nominal"] = nums[3]
-        elif len(nums) == 3:
-            # Case: Missing Coupon (Zero), Yield, Price, Nominal
-            data["Coupon"] = 0.0
-            data["Yield"] = nums[0]
-            data["Price"] = nums[1]
-            data["Nominal"] = nums[2]
+        price_idx = -1
+        for i, n in enumerate(nums):
+            # Price typically between 40 and 160%
+            # Yield/Coupon typically < 30%
+            if 40 <= n <= 160:
+                price_idx = i
+                break
+
+        if price_idx != -1:
+            data["Price"] = nums[price_idx]
+
+            # Nominal is usually immediately after Price
+            if len(nums) > price_idx + 1:
+                data["Nominal"] = nums[price_idx + 1]
+
+            # Values before Price are Yield and Coupon
+            if price_idx == 1:
+                # [Yield, Price, ...] -> Coupon is missing (0)
+                data["Yield"] = nums[0]
+                data["Coupon"] = 0.0
+            elif price_idx >= 2:
+                # [Coupon, Yield, Price, ...]
+                data["Yield"] = nums[price_idx - 1]
+                data["Coupon"] = nums[price_idx - 2]
+            elif price_idx == 0:
+                # [Price, Nominal...] -> Missing Yield/Coupon? Unlikely structure but safe default
+                data["Coupon"] = 0.0
+                data["Yield"] = 0.0
+
+        else:
+            # Fallback if Price not identified (e.g. Price < 40? Distress?)
+            # Use strict position if len >= 3
+            if len(nums) >= 4:
+                data["Coupon"] = nums[0]
+                data["Yield"] = nums[1]
+                data["Price"] = nums[2]
+                data["Nominal"] = nums[3]
+            elif len(nums) == 3:
+                data["Coupon"] = 0.0
+                data["Yield"] = nums[0]
+                data["Price"] = nums[1]
+                data["Nominal"] = nums[2]
 
         return data
 
