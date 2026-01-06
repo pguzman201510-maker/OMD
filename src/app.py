@@ -1,9 +1,9 @@
 
 import streamlit as st
 import pandas as pd
-from logic import PDFParser, BondLogic
-from data_manager import DataManager
-from pdf_generator import PDFGenerator
+from src.logic import PDFParser, BondLogic
+from src.data_manager import DataManager
+from src.pdf_generator import PDFGenerator
 import io
 import os
 from datetime import datetime
