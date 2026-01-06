@@ -1,9 +1,9 @@
 
 import streamlit as st
 import pandas as pd
-from logic import PDFParser, BondLogic
-from data_manager import DataManager
-from pdf_generator import PDFGenerator
+from src.logic import PDFParser, BondLogic
+from src.data_manager import DataManager
+from src.pdf_generator import PDFGenerator
 import io
 import os
 from datetime import datetime
@@ -57,16 +57,17 @@ if pdf_file:
 
     def parse_raw(rows, type_label):
         for r in rows:
+            # Map fields from logic.py parser
             data.append({
                 "Tipo": type_label,
                 "ISIN": r.get("ISIN", ""),
-                "Vencimiento": None,
-                "Denom (COP/UVR)": "COP",
-                "Cupón %": 0.0,
-                "Tasa %": 0.0,
-                "Precio (Sucio) %": 0.0,
-                "Valor Nominal Orig": 0.0,
-                "Nominal COP (Calc)": 0.0
+                "Vencimiento": r.get("Maturity"), # Might be None or string
+                "Denom (COP/UVR)": r.get("Denom", "COP"),
+                "Cupón %": r.get("Coupon", 0.0),
+                "Tasa %": r.get("Yield", 0.0),
+                "Precio (Sucio) %": r.get("Price", 0.0),
+                "Valor Nominal Orig": r.get("Nominal", 0.0),
+                "Nominal COP (Calc)": 0.0 # Calc field
             })
 
     if recogidos_raw:

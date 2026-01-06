@@ -305,25 +305,97 @@ class PDFParser:
             # Look for ISIN (starts with CO or similar, alphanumeric)
             # CO12TE000000
             if re.match(r'^[A-Z0-9]{10,12}', line):
-                parts = line.split()
-                if len(parts) >= 6:
-                    # Heuristic parsing
-                    # ISIN, Date, Denom, Coupon, Rate, Price, NomOrig, NomCOP
-                    # Note: Denom might be "COP" or "UVR"
-                    # Date might be YYYY-MM-DD or DD/MM/YYYY
-                    row_data = {
-                        "ISIN": parts[0],
-                        "Raw": line,
-                        "Type": current_section
-                    }
+                row_data = self.extract_bond_row_data(line)
+                row_data["Type"] = current_section
+                row_data["Raw"] = line
 
-                    # Try to identify date
-                    # Usually 2nd item
-                    # Try to identify numbers
+                if current_section == "RECOGIDOS":
+                    recogidos_rows.append(row_data)
+                elif current_section == "ENTREGADOS":
+                    entregados_rows.append(row_data)
 
-                    if current_section == "RECOGIDOS":
-                        recogidos_rows.append(row_data)
-                    elif current_section == "ENTREGADOS":
-                        entregados_rows.append(row_data)
+        return settlement_date, recogidos_rows, entregados_rows
+
+    def extract_bond_row_data(self, line):
+        """
+        Heuristic extraction of bond data from a line.
+        Expected columns: ISIN, Vencimiento, Den, Cupon, Tasa, Precio, Nom Orig, Nom COP
+        """
+        parts = line.split()
+        data = {
+            "ISIN": "",
+            "Maturity": None,
+            "Denom": "COP",
+            "Coupon": 0.0,
+            "Yield": 0.0,
+            "Price": 0.0,
+            "Nominal": 0.0
+        }
+
+        if not parts:
+            return data
+
+        # 1. ISIN (First usually)
+        if re.match(r'^[A-Z0-9]{10,12}$', parts[0]):
+            data["ISIN"] = parts[0]
+
+        # 2. Date (Search for pattern)
+        # YYYY-MM-DD or DD/MM/YYYY
+        # Using a list allows us to remove found items to avoid confusion?
+        # Better to iterate and classify.
+
+        nums = []
+        date_str = None
+        denom = "COP"
+
+        for p in parts[1:]:
+            # Check for Denom
+            if p.upper() in ["UVR", "COP", "PESOS"]:
+                denom = "UVR" if p.upper() == "UVR" else "COP"
+                continue
+
+            # Check for Date
+            # 2025-10-10 or 10/10/2025
+            if re.match(r'\d{4}-\d{2}-\d{2}', p) or re.match(r'\d{1,2}/\d{1,2}/\d{4}', p):
+                date_str = p
+                continue
+
+            # Check for Percentage (remove %)
+            p_clean = p.replace('%', '').replace(',', '')
+            # Handle standard number format (1,000.00 or 1.000,00)
+            # Assumption: PDF text usually has standard format or consistent.
+            # Let's try to float it.
+            try:
+                val = float(p_clean)
+                nums.append(val)
+            except:
+                pass
+
+        data["Denom"] = denom
+        data["Maturity"] = date_str
+
+        # Heuristic mapping of numbers
+        # Usually: Coupon (small), Yield (small), Price (around 100), Nominal (Huge)
+        # Or Position based: Cupon, Tasa, Precio, NomOrig, NomCOP
+        # If we have 5 numbers found:
+        # [Coupon, Yield, Price, NomOrig, NomCOP]
+
+        # Filter out numbers that might be just parts of date if logic failed? No.
+
+        if len(nums) >= 4:
+            # Assuming order: Coupon, Yield, Price, Nominal...
+            # Coupon and Yield are usually < 20
+            # Price is ~80-130
+            # Nominal is > 1000
+
+            # Let's assign by position first as per column list:
+            # CUPON, TASA, PRECIO, NOMINAL
+
+            data["Coupon"] = nums[0]
+            data["Yield"] = nums[1]
+            data["Price"] = nums[2]
+            data["Nominal"] = nums[3]
+
+        return data
 
         return settlement_date, recogidos_rows, entregados_rows
