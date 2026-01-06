@@ -343,6 +343,10 @@ class PDFParser:
                 # Case 2: "5." + "000" -> "5.000"
                 elif re.match(r'.*[.,]$', prev) and re.match(r'^\d+', p):
                     merged_parts[-1] += p
+                # Case 3: "5.000" + "000.000" -> "5.000000.000" (Split by space, implied separator)
+                # Check if current starts with 000 (common in split nominals) and prev ends with digit
+                elif re.match(r'^000', p) and re.match(r'.*\d$', prev):
+                    merged_parts[-1] += p
                 else:
                     merged_parts.append(p)
 
