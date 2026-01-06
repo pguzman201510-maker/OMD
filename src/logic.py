@@ -337,8 +337,9 @@ class PDFParser:
 
                 prev = merged_parts[-1]
 
-                # Case 1: "5.000" + ".000" -> "5.000.000"
-                if re.match(r'^[.,]\d+', p) and re.match(r'.*\d$', prev):
+                # Case 1: "5.000" + ".000" or "5.000" + "." -> "5.000.000" / "5.000."
+                # If current starts with . or , (even standalone) and prev ends with digit
+                if re.match(r'^[.,]', p) and re.match(r'.*\d$', prev):
                     merged_parts[-1] += p
                 # Case 2: "5." + "000" -> "5.000"
                 elif re.match(r'.*[.,]$', prev) and re.match(r'^\d+', p):
