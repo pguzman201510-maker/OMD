@@ -348,6 +348,10 @@ class PDFParser:
                 # Check if current starts with 000 (common in split nominals) and prev ends with digit
                 elif re.match(r'^000', p) and re.match(r'.*\d$', prev):
                     merged_parts[-1] += p
+                # Case 4: "31" + "3.318..." -> "313.318..." (Split by space inside group)
+                # Prev is short digits (<=3), Curr starts with Digits+Dot (e.g. 3.318)
+                elif re.match(r'^\d{1,3}$', prev) and re.match(r'^\d{1,3}\.', p):
+                     merged_parts[-1] += p
                 else:
                     merged_parts.append(p)
 
