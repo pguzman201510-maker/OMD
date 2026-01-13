@@ -180,51 +180,6 @@ class BondLogic:
 
     @staticmethod
     def calculate_indexation(nominal, uvr_forward, is_uvr_bond):
-        """
-        Si es UVR: Valor nominal * UVR (fin de periodo) - Nominal
-        Else: 0? Prompt implies indexation logic for UVR.
-        Wait, "Valor nominal" in formula... is this Nominal in UVR or COP?
-        "Valor nominal * UVR" -> Implies Nominal is in UVR units.
-        So: Nominal_UVR * UVR_Final_COP - Nominal_COP_Initial?
-        Prompt: "Valor nominal * UVR (fin de periodo) - Nominal"
-        Usually: Nominal_COP_End - Nominal_COP_Start
-        Nominal_COP_End = Nominal_UVR * UVR_Forward
-        Nominal_COP_Start = Nominal_UVR * UVR_Spot (at issuance?) Or just the Nominal input?
-
-        Let's interpret: "Valor nominal [en UVR] * UVR (fin de periodo) - Nominal [en COP?]"
-        Usually Nominal input for UVR bonds is in UVR units.
-        But prompt says: "Valor nominal COP" is calculated separately.
-
-        Let's assume: Indexation = (Nominal_UVR * UVR_Forward) - (Nominal_UVR * UVR_Spot)?
-        OR: Indexation = Nominal_UVR * UVR_Forward - Nominal_COP_Transaction?
-
-        Prompt: "Si el titulo es en UVR, entonces: Valor nominal * UVR (fin de periodo) - Nominal"
-        This 'Nominal' at the end likely refers to the COP equivalent at the start OR just the UVR nominal?
-        Dimensionality: UVR * COP/UVR = COP. Nominal (UVR) * COP/UVR = COP.
-        So "Nominal" at the end must be in COP.
-
-        Likely: Indexation = (Nominal_UVR * UVR_Forward) - (Nominal_UVR * UVR_Transaction)
-
-        Ref: "Valor Costo" for UVR = UVR_t * Nominal_COP * (DirtyPrice/100)??
-        Wait, earlier: "Si es en UVR, entonces: UVR_t * Valor Nominal COP * (Precio Sucio/100)"
-        This sounds like "Valor Nominal COP" is actually Nominal in UVR Units?
-        Because UVR_t * Nominal_UVR * Price% = Cost in COP.
-        If Nominal was already COP, why multiply by UVR_t?
-
-        Assumption: The input "Valor Nominal Moneda Original" for UVR bonds is in UVR units.
-        "Valor Nominal COP" (calculated) = Nominal_Original * UVR_Spot?
-
-        Prompt: "Se calcula la UVR que es: (valor nominal cop)/(valor nominal moneda original)"
-        This implies we derive the UVR spot from the inputs if provided, or vice versa.
-
-        Let's stick to the Indexation formula:
-        Indexation = (Nominal_Original_UVR * UVR_Forward) - (Nominal_Original_UVR * UVR_Spot)
-        Which simplifies to Nominal_Original_UVR * (UVR_Forward - UVR_Spot).
-
-        But the prompt says: "Valor nominal * UVR (fin de periodo) - Nominal"
-        If "Nominal" refers to Nominal COP Value at Transaction (Nominal_Original * UVR_Spot).
-        Then yes.
-        """
         if not is_uvr_bond:
             return 0.0
 
