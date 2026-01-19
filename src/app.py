@@ -1,9 +1,9 @@
 
 import streamlit as st
 import pandas as pd
-from logic import PDFParser, BondLogic
-from data_manager import DataManager
-from pdf_generator import PDFGenerator
+from src.logic import PDFParser, BondLogic
+from src.data_manager import DataManager
+from src.pdf_generator import PDFGenerator
 import io
 import os
 from datetime import datetime
@@ -46,7 +46,9 @@ if pdf_file:
 
     # Operation ID Input
     default_id = f"OMD_{settlement_date.strftime('%d%m%y')}" if settlement_date else "OMD_010125"
-    operation_id = st.text_input("ID de Operación", value=default_id)
+    col_id, col_type = st.columns(2)
+    operation_id = col_id.text_input("ID de Operación", value=default_id)
+    operation_type = col_type.selectbox("Tipo de Operación", ["Tesorería", "Mercado"])
 
     # Step 2: Data Editor for Bonds
     st.subheader("Detalle de Títulos")
@@ -174,6 +176,30 @@ if pdf_file:
         cfn = valor_giro_final + efectos_cupones
         resultado_general = saldo_deuda + (cfn + indexaciones_total)
 
+        # New Stats per user request
+        # Valor a Girar = Recibidos Costo - Entregados Costo
+        # Note: In my logic, Valor Costo Recibido is + for calculation, but logic uses sign.
+        # Let's sum based on Type in 'results'
+
+        cost_rec = sum([r["Valor Costo"] for r in results if r["Tipo"] == "Recogido"])
+        cost_ent = sum([r["Valor Costo"] for r in results if r["Tipo"] == "Entregado"])
+        # My previous logic: Recogido Nominal < 0 -> Valor Costo < 0.
+        # Entregado Nominal > 0 -> Valor Costo > 0.
+        # Formula: Recibidos Costo - Entregados Costo.
+        # Since my Cost is signed, let's take Absolute values for this specific formula
+        # IF the formula implies Magnitude.
+        # User: "Valora a Girar = Recibidos Costo- Entregados Costo"
+        # Usually: Cost of what we Buy - Cost of what we Sell = Net Payment.
+        # So Abs(Cost Rec) - Abs(Cost Ent).
+
+        val_a_girar = abs(cost_rec) - abs(cost_ent)
+
+        # Efecto Saldo = Entregados Nominal - Recibidos Nominal
+        # Entregados Nominal (Pos) - Recibidos Nominal (Pos Magnitude)
+        nom_rec = sum([abs(r["Nominal Orig"]) for r in results if r["Tipo"] == "Recogido"])
+        nom_ent = sum([abs(r["Nominal Orig"]) for r in results if r["Tipo"] == "Entregado"])
+        efecto_saldo = nom_ent - nom_rec
+
         st.subheader("Resultados Detallados")
         df_results = pd.DataFrame(results)
 
@@ -187,14 +213,16 @@ if pdf_file:
             }))
 
         st.subheader("Resumen de Operación")
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         col1.metric("Monto Canjeado", f"{monto_canjeado:,.2f}")
-        col2.metric("Costo Fiscal Neto (CFN)", f"{cfn:,.2f}")
-        col3.metric("Resultado General", f"{resultado_general:,.2f}")
+        col2.metric("Valor a Girar", f"{val_a_girar:,.2f}")
+        col3.metric("Efecto Saldo", f"{efecto_saldo:,.2f}")
+        col4.metric("Resultado General", f"{resultado_general:,.2f}")
 
         # Prepare Stats for Export
         stats = {
             "operation_id": operation_id,
+            "op_type": operation_type,
             "fecha_liq": settlement_date,
             "monto_canjeado": monto_canjeado,
             "valor_giro": valor_giro_final,
