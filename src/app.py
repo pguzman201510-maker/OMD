@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import tempfile
-from pdf_processor import extract_date, process_tables
+from pdf_processor import extract_date, process_tables, process_manual_text
 
 st.set_page_config(page_title="Extractor OMD", layout="wide")
 
@@ -17,61 +17,101 @@ tipo_operacion = st.radio("Seleccione el Tipo de Operación:", ("Tesorería", "M
 
 uploaded_files = st.file_uploader("Cargar Memorandos (PDF)", type=["pdf"], accept_multiple_files=True)
 
-if st.button("Procesar Archivos"):
+if 'processed_files' not in st.session_state:
+    st.session_state['processed_files'] = {}
+
+def process_files():
     if not uploaded_files:
         st.warning("Por favor cargue al menos un archivo PDF.")
-    else:
-        all_data = []
+        return
 
-        progress_bar = st.progress(0)
+    progress_bar = st.progress(0)
 
-        for i, uploaded_file in enumerate(uploaded_files):
-            # Save temp file securely
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                tmp_file.write(uploaded_file.getbuffer())
-                temp_path = tmp_file.name
+    for i, uploaded_file in enumerate(uploaded_files):
+        file_id = uploaded_file.name
 
-            try:
-                # Extract Data
-                st.subheader(f"Procesando: {uploaded_file.name}")
-                date = extract_date(temp_path)
-                st.write(f"**Fecha de Cumplimiento:** {date}")
+        # Skip if already processed successfully unless re-triggered?
+        # For simplicity, we process fresh every time button is clicked.
 
-                df_recibidos, df_entregados = process_tables(temp_path)
+        # Save temp file securely
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            tmp_file.write(uploaded_file.getbuffer())
+            temp_path = tmp_file.name
 
-                if df_recibidos.empty and df_entregados.empty:
-                    st.error("No se encontraron tablas legibles. Puede que el PDF sea una imagen.")
-                else:
-                    st.write("Títulos Recibidos:")
-                    st.dataframe(df_recibidos)
+        try:
+            # Extract Data
+            date = extract_date(temp_path)
+            df_recibidos, df_entregados = process_tables(temp_path)
 
-                    st.write("Títulos Entregados:")
-                    st.dataframe(df_entregados)
+            # Store in session state
+            st.session_state['processed_files'][file_id] = {
+                'date': date,
+                'recibidos': df_recibidos,
+                'entregados': df_entregados,
+                'temp_path': temp_path, # Keep tracking just in case
+                'manual_needed': df_recibidos.empty and df_entregados.empty,
+                'manual_text': ""
+            }
 
-                    # Add metadata for Excel generation
-                    # We need to store this data
-                    file_data = {
-                        "filename": uploaded_file.name,
-                        "date": date,
-                        "tipo": tipo_operacion,
-                        "recibidos": df_recibidos,
-                        "entregados": df_entregados
-                    }
-                    all_data.append(file_data)
+        except Exception as e:
+            st.error(f"Error procesando {uploaded_file.name}: {e}")
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
-            except Exception as e:
-                st.error(f"Error procesando {uploaded_file.name}: {e}")
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+        progress_bar.progress((i + 1) / len(uploaded_files))
 
-            progress_bar.progress((i + 1) / len(uploaded_files))
+if st.button("Procesar Archivos"):
+    process_files()
 
-        if all_data:
-            st.success("Procesamiento completado.")
+# Display results and handle manual input
+all_data_for_excel = []
 
-            # Store data in session state to persist for download button
-            st.session_state['extracted_data'] = all_data
+if uploaded_files:
+    for uploaded_file in uploaded_files:
+        file_id = uploaded_file.name
+        if file_id in st.session_state['processed_files']:
+            data = st.session_state['processed_files'][file_id]
+
+            st.subheader(f"Archivo: {file_id}")
+            st.write(f"**Fecha de Cumplimiento:** {data['date']}")
+
+            df_recibidos = data['recibidos']
+            df_entregados = data['entregados']
+
+            if data['manual_needed']:
+                st.warning("No se encontraron tablas legibles. Por favor pegue el texto a continuación:")
+
+                # Use a form to capture manual input without rerun issues
+                with st.form(key=f"manual_form_{file_id}"):
+                    manual_text = st.text_area("Texto del PDF", height=200)
+                    submit_manual = st.form_submit_button("Procesar Texto Manual")
+
+                    if submit_manual:
+                        # Update the data in session state
+                         df_rec, df_ent = process_manual_text(manual_text)
+                         data['recibidos'] = df_rec
+                         data['entregados'] = df_ent
+                         data['manual_needed'] = False # Mark as resolved?
+                         # Actually we just update the dfs, next rerun will show tables
+                         st.rerun()
+
+            if not df_recibidos.empty or not df_entregados.empty:
+                st.write("Títulos Recibidos:")
+                st.dataframe(df_recibidos)
+                st.write("Títulos Entregados:")
+                st.dataframe(df_entregados)
+
+                all_data_for_excel.append({
+                    "filename": file_id,
+                    "date": data['date'],
+                    "tipo": tipo_operacion,
+                    "recibidos": df_recibidos,
+                    "entregados": df_entregados
+                })
+
+if all_data_for_excel:
+    st.session_state['extracted_data'] = all_data_for_excel
 
 # Excel Generation Trigger
 if 'extracted_data' in st.session_state:
